@@ -110,7 +110,7 @@ st.markdown(f"""
 view = st.sidebar.radio("战略地图", ["🏠 Balance 看板", "📉 资产演变长廊", "🕳️ “无感支出”黑洞", "🏦 资产对冲分析"])
 
 if view == "🏠 Balance 看板":
-    st.title(f"📊 Balance & Future | 家庭财务战略系统")
+    st.title(f"📊 Balance & Future | 家庭财务系统")
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("家庭总到手现金", f"¥{int(total_net):,}")
