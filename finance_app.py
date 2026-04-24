@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 # --- 页面配置 ---
 st.set_page_config(page_title="Balance & Future Pro", layout="wide")
 
-# --- 密码门禁逻辑 (使用 Secrets 安全模式) ---
+# --- 密码门禁逻辑 (Secrets 安全模式) ---
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
@@ -14,15 +14,14 @@ def check_password():
         _, center_col, _ = st.columns([1, 2, 1])
         with center_col:
             st.title("🔒 Balance & Future")
-            st.write("这是一个私密的家庭财务系统，请证明你是自己人。")
+            st.write("这是一个私密的家庭财务战略系统。")
             pwd = st.text_input("请输入家庭通行码：", type="password")
             if st.button("进入系统"):
-                # 💡 注意：部署后请在 Streamlit Cloud 的 Secrets 中设置 password
                 if pwd == st.secrets["password"]:
                     st.session_state.password_correct = True
                     st.rerun()
                 else:
-                    st.error("❌ 暗号不对，请确认。")
+                    st.error("❌ 暗号不对。")
         return False
     return True
 
@@ -54,21 +53,21 @@ with st.sidebar.expander("👤 成员名称", expanded=True):
     n_a = st.text_input("我的称呼", "我")
     n_b = st.text_input("队友称呼", "队友")
 
-with st.sidebar.expander("✈️ 梦想旅行配置", expanded=True): # 新增点：目的地配置
+with st.sidebar.expander("✈️ 梦想旅行配置", expanded=True):
     dream_dest = st.text_input("梦想目的地", "马尔代夫")
-    dream_cost = st.number_input("预计人均花费", value=15000.0, step=1000.0)
+    dream_cost = st.number_input("预计人均花费", value=15000.0)
     travel_num = st.number_input("出行人数", value=2, min_value=1)
     total_travel_cost = dream_cost * travel_num
 
 with st.sidebar.expander("💰 收入与副业配置", expanded=False):
     st.write(f"**{n_a}**")
-    a_g = st.number_input(f"{n_a}主业税前", value=26000.0, step=500.0)
+    a_g = st.number_input(f"{n_a}主业税前", value=26000.0)
     a_gig = st.number_input(f"{n_a}副业月入", value=0.0)
     a_m = st.selectbox(f"{n_a}缴纳基数", ["全额缴纳", "最低标准(2360)"], key="a_ms")
     a_h = st.number_input(f"{n_a}月均工时", value=176, min_value=1)
     st.write("---")
     st.write(f"**{n_b}**")
-    b_g = st.number_input(f"{n_b}主业税前", value=18000.0, step=500.0)
+    b_g = st.number_input(f"{n_b}主业税前", value=18000.0)
     b_gig = st.number_input(f"{n_b}副业月入", value=0.0)
     b_m = st.selectbox(f"{n_b}缴纳基数", ["全额缴纳", "最低标准(2360)"], key="b_ms")
     b_h = st.number_input(f"{n_b}月均工时", value=176, min_value=1)
@@ -78,7 +77,7 @@ with st.sidebar.expander("🏠 债务与资产", expanded=False):
     m_p = st.number_input("房贷本金", value=400000.0)
     m_r = st.number_input("房贷年利率(%)", value=3.2)
     m_y = st.number_input("房贷年限", value=30)
-    asset_total = st.number_input("当前可变现总资产", value=600000.0) # 为 FIRE 准备
+    asset_total = st.number_input("当前可变现总资产", value=600000.0)
     c_l = st.number_input("车贷月供", value=2000.0)
     living = st.number_input("家庭基础生活费", value=6000.0)
     other = st.number_input("其他杂项", value=0.0)
@@ -120,24 +119,22 @@ if view == "🏠 Balance 看板":
     hourly = (a_g + a_gig)/a_h if st.session_state.active == n_a else (b_g + b_gig)/b_h
     col4.metric(f"{st.session_state.active} 实时时薪", f"¥{hourly:.1f}")
     
-    st.info(f"💡 **公积金抵消感：** 每月公积金入账 ¥{int(total_pf):,}，已自动对冲了房贷月供的 **{int(total_pf/curr_m*100) if curr_m>0 else 100}%**。")
+    st.info(f"💡 **公积金抵消感：** 每月公积金入账 ¥{int(total_pf):,}，已对冲了房贷月供的 **{int(total_pf/curr_m*100) if curr_m>0 else 100}%**。")
     
-    # 新增点：家庭旅行自由指数
     if savings > 0:
         months_to_travel = total_travel_cost / savings
-        st.success(f"🏖️ **家庭旅行自由指数：** 按目前的净结余，你们每 **{months_to_travel:.1f}** 个月就能‘全款’去一次 **{dream_dest}**。")
-    else:
-        st.warning(f"🏖️ **家庭旅行自由指数：** 当前结余为负，暂无法支撑 **{dream_dest}** 的旅行计划，需优化开销。")
+        st.success(f"🏖️ **家庭旅行自由指数：** 按目前净结余，每 **{months_to_travel:.1f}** 个月就能‘全款’去一次 **{dream_dest}**。")
 
     st.divider()
     st.subheader("🔍 消费工时透视")
     l1, l2 = st.columns([1, 2])
     with l1:
         who = st.selectbox("谁来买单？", [n_a, n_b], key="active")
-        price = st.number_input("心仪商品价格(元)", value=6000.0)
+        item_name = st.text_input("心仪商品/梦想支出", "新智能手机") # 修复点1：自定义商品名回归
+        price = st.number_input("价格(元)", value=6000.0)
     with l2:
         h = float(price / hourly) if hourly > 0 else 0
-        st.write(f"购买此商品相当于消耗 **{who}** 约 **{h:.1f} 小时** 的奋斗成果。")
+        st.write(f"购买 **{item_name}** 相当于消耗 **{who}** 约 **{h:.1f} 小时** 的奋斗成果。")
         st.progress(min(h/176, 1.0))
 
     st.divider()
@@ -157,15 +154,22 @@ if view == "🏠 Balance 看板":
 elif view == "📉 资产演变长廊":
     st.title("⏳ 资产演变长廊")
     
-    # 新增点：FIRE 指数加在这里
-    st.subheader("🔥 FIRE 退休进度审计")
-    fire_target = total_exp * 12 * 25 # 25倍原则
+    # 修复点2：FIRE 目标自定义逻辑
+    st.subheader("🔥 FIRE 退休进度")
+    fire_mode = st.radio("FIRE 目标计算方式", ["25倍年支原则 (科学默认)", "自定义目标金额"], horizontal=True)
+    
+    if fire_mode == "25倍年支原则 (科学默认)":
+        fire_target = total_exp * 12 * 25
+        st.write(f"💡 目标基于当前年支出 ¥{int(total_exp*12):,} 的 25 倍计算。")
+    else:
+        fire_target = st.number_input("输入你的自定义退休目标金额 (元)", value=5000000.0, step=100000.0)
+        
     fire_prog = asset_total / fire_target if fire_target > 0 else 0
     f1, f2 = st.columns(2)
-    f1.metric("FIRE 目标金额 (25倍年支)", f"¥{int(fire_target):,}")
+    f1.metric("FIRE 目标金额", f"¥{int(fire_target):,}")
     f1.write(f"目前达成率：{fire_prog*100:.2f}%")
     f1.progress(min(fire_prog, 1.0))
-    f2.info(f"💡 **逻辑：** 达到 ¥{int(fire_target):,} 后，理论上你每年提取 4% 的资产即可覆盖全家全年开销 ¥{int(total_exp*12):,}，实现财务自由。")
+    f2.info(f"目标金额 ¥{int(fire_target):,}。目前的资产足以支撑你未来约 **{int(asset_total/(total_exp*12)) if total_exp>0 else 0}** 年的生活。")
     
     st.divider()
     st.subheader("📈 未来 20 年负债递减投影")
@@ -174,21 +178,11 @@ elif view == "📉 资产演变长廊":
 
 elif view == "🕳️ “无感支出”黑洞":
     st.title("🕳️ “无感支出”黑洞")
-    
-    # 新增点：文字说明
-    st.markdown("""
-    ### 📌 什么是“无感支出”？
-    财务学中著名的**“拿铁因子”**理论指出：生活中那些看似不起眼的微小开销（如每日奶茶、随手打车、自动续费的会员），在时间长河中会通过**复利效应**演变成巨大的财务黑洞。
-    
-    **💡 这个页面想告诉你：**
-    如果你能审视这些“无感”的财务摩擦，将它们转化为资产投资，你的人生进度条可能会提前 3-5 年达成终极目标。
-    """)
-    
-    daily = st.number_input("每日‘无感’开销 (咖啡/零食/打车)", value=50.0)
+    st.markdown("### 📌 什么是“无感支出”？\n财务学中著名的**“拿铁因子”**理论指出：生活中那些看似不起眼的微小开销，在时间长河中会通过**复利效应**演变成巨大的财务黑洞。")
+    daily = st.number_input("每日‘无感’开销", value=50.0)
     y = st.slider("持续累积年数", 1, 30, 10)
     total = daily * 365 * y
-    st.error(f"警惕：{y}年后，这些碎碎碎的支出将累计吞噬 ¥{total:,}。")
-    st.write(f"这笔钱足以让你提前偿还约 **{int(total/m_p*100) if m_p>0 else 0}%** 的房贷本金。")
+    st.error(f"警惕：{y}年后，这些支出将累计吞噬 ¥{total:,}。")
 
 elif view == "🏦 资产对冲分析":
     st.title("🛡️ 资产收益对冲分析")
