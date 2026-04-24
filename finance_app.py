@@ -59,10 +59,10 @@ def run_strategic_calc(gross_a, gig_a, gross_b, gig_b, m_p, m_r, m_y, c_l, livin
     }
 
 # --- 3. 侧边栏：全局战略配置 ---
-st.sidebar.title("🚀 战略配置中心")
+st.sidebar.title("🚀 财务设置中心")
 
 with st.sidebar.expander("👤 成员与梦想配置", expanded=False):
-    n_a = st.text_input("我的称呼", "Jim")
+    n_a = st.text_input("我的称呼", "我")
     n_b = st.text_input("队友称呼", "队友")
     dream_dest = st.text_input("梦想目的地", "马尔代夫")
     dream_cost = st.number_input("预计人均花费", value=15000.0)
