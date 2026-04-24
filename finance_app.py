@@ -30,7 +30,6 @@ if not check_password():
 # --- 2. 战略计算引擎 ---
 def run_strategic_calc(gross_a, gig_a, gross_b, gig_b, m_p, m_r, m_y, c_l, living, other, base_type_a, base_type_b, pf_rate):
     def get_net(gross, gig, base_type, p_rate):
-        # 核心修复：找回 2360 最低标准逻辑
         base_val = gross if base_type == "全额缴纳" else 2360
         deduct = base_val * (0.08 + 0.02 + 0.005 + p_rate)
         taxable = max(0, gross - deduct - 5000)
@@ -88,6 +87,8 @@ with st.sidebar.expander("💰 方案 A：当前现实", expanded=True):
     m_y = st.number_input("房贷年限", value=30)
     asset_total = st.number_input("当前总资产", value=600000.0)
     c_l = st.number_input("每月车贷", value=2000.0)
+    # 修复点 1：找回丢失的车贷年限配置
+    c_y = st.number_input("车贷剩余年数", value=5, min_value=0)
     living = st.number_input("基础生活费", value=6000.0)
     other = st.number_input("其他杂项开支", value=0.0)
 
@@ -108,7 +109,6 @@ else:
 data_a = run_strategic_calc(a_g, a_gig, b_g, b_gig, m_p, m_r, m_y, c_l, living, other, a_m, b_m, pf_pct)
 data_b = run_strategic_calc(a_g_b, a_gig, b_g_b, b_gig, m_p, m_r, m_y, c_l, living_b, other + purchase_b/12, a_m_b, b_m_b, pf_pct)
 
-# 修复：全局时薪变量，确保切换页面不报错
 if 'act_mem' not in st.session_state: st.session_state.act_mem = n_a
 active_hourly = (a_g + a_gig)/a_h if st.session_state.act_mem == n_a else (b_g + b_gig)/b_h
 
@@ -116,7 +116,6 @@ active_hourly = (a_g + a_gig)/a_h if st.session_state.act_mem == n_a else (b_g +
 view = st.sidebar.radio("战略地图", ["🏠 Balance 看板", "📉 资产演变长廊", "🕳️ “无感支出”黑洞", "🏦 资产对冲分析"])
 
 if view == "🏠 Balance 看板":
-    # 健康分算法
     save_rate = data_a['savings'] / data_a['total_net'] if data_a['total_net'] > 0 else 0
     debt_ratio = (data_a['total_exp'] - living) / data_a['total_net'] if data_a['total_net'] > 0 else 1
     moat_months = asset_total / data_a['total_exp'] if data_a['total_exp'] > 0 else 0
@@ -175,7 +174,7 @@ if view == "🏠 Balance 看板":
     st.plotly_chart(px.bar(exp_df, x="项目", y="金额", color="项目", text_auto='.0f', template="plotly_white"), use_container_width=True)
 
 elif view == "📉 资产演变长廊":
-    st.title("⏳ 资产演变与 FIRE 审计")
+    st.title("⏳ 资产演变与 FIRE 进度")
     st.subheader("🔥 FIRE 退休进度（对比模式）")
     f_mode = st.radio("FIRE 目标计算方式", ["25倍年支原则", "自定义目标金额"], horizontal=True)
     t_a = data_a['total_exp'] * 12 * 25 if f_mode == "25倍年支原则" else st.number_input("自定义目标", value=5000000.0)
@@ -187,18 +186,26 @@ elif view == "📉 资产演变长廊":
     if show_b:
         f2.metric("方案 B 目标", f"¥{int(t_b):,}", delta=f"{asset_total/t_b*100:.1f}% 达成")
         f2.progress(min(asset_total/t_b, 1.0))
+    
+    # 修复点 2：找回 FIRE 解释文本
+    st.info(f"💡 **FIRE 逻辑：** 达到 ¥{int(t_a):,} 后，理论上每年提取 4% 的资产即可覆盖全家全年开销（基于 25 倍原则）。目前的资产足以支撑约 **{int(asset_total/(data_a['total_exp']*12)) if data_a['total_exp']>0 else 0}** 年的生活。")
             
     st.divider()
     st.subheader("📈 20 年现金流博弈对比")
-    p_a = [{"月": m, "方案": "方案 A", "月支出": data_a['m_seq'][m] if m < len(data_a['m_seq']) else 0 + c_l + living} for m in range(120)]
+    
+    # 修复点 3：重构图表逻辑，恢复车贷年限影响和比例展示
+    c_y_months = int(c_y * 12)
+    p_a = [{"月": m, "房贷": float(data_a['m_seq'][m]) if m < len(data_a['m_seq']) else 0.0, "车贷": float(c_l) if m < c_y_months else 0.0, "固定": float(living+other)} for m in range(240)]
+    
     if show_b:
-        p_b = [{"月": m, "方案": "方案 B", "月支出": data_b['m_seq'][m] if m < len(data_b['m_seq']) else 0 + c_l + living_b} for m in range(120)]
-        st.plotly_chart(px.line(pd.DataFrame(p_a + p_b), x="月", y="月支出", color="方案"), use_container_width=True)
+        p_b_flat = [{"月": m, "方案": "方案 B 总支出", "金额": (data_b['m_seq'][m] if m < len(data_b['m_seq']) else 0.0) + (c_l if m < c_y_months else 0.0) + living_b + other + purchase_b/12} for m in range(240)]
+        p_a_flat = [{"月": m, "方案": "方案 A 总支出", "金额": p["房贷"] + p["车贷"] + p["固定"]} for p in p_a]
+        st.plotly_chart(px.line(pd.DataFrame(p_a_flat + p_b_flat), x="月", y="金额", color="方案"), use_container_width=True)
     else:
-        st.plotly_chart(px.area(pd.DataFrame(p_a), x="月", y="月支出"), use_container_width=True)
+        st.plotly_chart(px.area(pd.DataFrame(p_a), x="月", y=["房贷", "车贷", "固定"]), use_container_width=True)
 
 elif view == "🕳️ “无感支出”黑洞":
-    st.title("🕳️ “无感支出”黑洞 & 订阅制断头台")
+    st.title("🕳️ “无感支出”黑洞 & 订阅制费用")
     st.markdown("### 📌 什么是“无感支出”？\n财务学中著名的**“拿铁因子”**理论指出：那些微小的、自动续费的开销，在复利下会演变成巨大的黑洞。")
     
     st.subheader("✂️ 订阅制清单管理")
