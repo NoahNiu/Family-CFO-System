@@ -4,7 +4,7 @@ import plotly.express as px
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. 页面配置与安全门禁 ---
-st.set_page_config(page_title="Balance & Future Pro V18", layout="wide")
+st.set_page_config(page_title="Balance & Future Pro V18.1", layout="wide")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -28,11 +28,10 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 2. 云端数据调度中心 (支持多存档隔离) ---
+# --- 2. 云端数据调度中心 ---
 @st.cache_data(ttl=0)
 def load_cloud_config(profile_name):
     try:
-        # 根据当前选择的存档，动态读取对应的表 (Config_A 或 Config_B)
         sheet_name = f"Config_{profile_name}"
         df = conn.read(worksheet=sheet_name, usecols=[0, 1, 2])
         df = df.dropna(subset=['Parameter'])
@@ -42,21 +41,17 @@ def load_cloud_config(profile_name):
     except Exception as e:
         return {"values": {}, "memos": {}}
 
-# --- 侧边栏：多存档切换器 ---
 st.sidebar.title("🚀 战略配置中心")
 st.sidebar.markdown("### 📂 当前档案槽位")
-# 核心升级：存档下拉菜单
 active_profile = st.sidebar.selectbox(
     "切换云端存档 (互相独立)", 
     ["A", "B"], 
-    format_func=lambda x: "存档 A (牛计划)" if x == "A" else "存档 B (贤计划)"
+    format_func=lambda x: "存档 A (主计划)" if x == "A" else "存档 B (独立分身)"
 )
 
-# 监听存档切换，一旦切换立即刷新系统状态并重载云端数据
 if st.session_state.get('current_profile') != active_profile:
     st.session_state.current_profile = active_profile
     st.session_state.full_config = load_cloud_config(active_profile)
-    # 如果处于黑洞页面，清理旧表格的缓存状态
     if 'sub_ed' in st.session_state:
         del st.session_state['sub_ed']
     st.rerun()
@@ -138,7 +133,6 @@ else:
     a_g_b, a_m_b, b_g_b, b_m_b, living_b, purchase_b = a_g, a_m, b_g, b_m, living, 0
 
 st.sidebar.divider()
-# 动态生成对应的保存表名
 if st.sidebar.button(f"💾 覆盖保存至【存档 {active_profile}】"):
     new_v = {"n_a": n_a, "n_b": n_b, "dream_dest": dream_dest, "dream_cost": dream_cost, "travel_num": travel_num, "a_g": a_g, "a_gig": a_gig, "a_m": a_m, "a_h": a_h, "b_g": b_g, "b_gig": b_gig, "b_m": b_m, "b_h": b_h, "pf_pct": pf_pct, "m_p": m_p, "m_r": m_r, "m_y": m_y, "asset_total": asset_total, "c_l": c_l, "c_y": c_y, "living": living, "other": other}
     save_data = [{"Parameter": k, "Value": v, "备注": st.session_state.full_config["memos"].get(k, "")} for k, v in new_v.items()]
@@ -153,57 +147,108 @@ data_a = run_calc(a_g, a_gig, b_g, b_gig, m_p, m_r, m_y, c_l, living, other, a_m
 data_b = run_calc(a_g_b, a_gig, b_g_b, b_gig, m_p, m_r, m_y, c_l, living_b, other + purchase_b/12, a_m_b, b_m_b, pf_pct)
 
 if 'act_m' not in st.session_state: st.session_state.act_m = n_a
+# 维持全局变量给黑洞页面使用
 active_hourly = (a_g + a_gig)/a_h if st.session_state.act_m == n_a else (b_g + b_gig)/b_h
 
 # --- 6. 页面渲染 ---
 if view == "🏠 Balance 看板":
-    sr = data_a['savings'] / data_a['total_net'] if data_a['total_net'] > 0 else 0
-    dr = (data_a['total_exp'] - living) / data_a['total_net'] if data_a['total_net'] > 0 else 1
-    moat = asset_total / data_a['total_exp'] if data_a['total_exp'] > 0 else 0
-    score = (min(sr/0.4, 1)*40) + (max(0, 1-dr/0.6)*30) + (min(moat/12, 1)*30)
     
-    st.title(f"📊 Balance & Future | 健康分：{int(score)}")
-    st.progress(score/100)
-    st.markdown("<style>[data-testid='stMetric']:nth-child(3) { background-color: rgba(16, 185, 129, 0.2); }</style>", unsafe_allow_html=True)
+    # 💡 核心新增：看板视角的自由切换
+    if show_b:
+        view_mode = st.radio("👀 选择看板全局视角：", ["⚖️ A/B 核心对决 (对比模式)", "📊 仅看方案 A (现实)", "🚀 仅看方案 B (预测)"], horizontal=True)
+        st.divider()
+    else:
+        view_mode = "📊 仅看方案 A (现实)"
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("总到手(A)", f"¥{int(data_a['total_net']):,}")
-    c2.metric("总支出(A)", f"¥{int(data_a['total_exp']):,}")
-    c3.metric("月结余(A)", f"¥{int(data_a['savings']):,}", delta=f"{int(sr*100)}% 储蓄率")
-    c4.metric(f"{st.session_state.act_m} 时薪", f"¥{active_hourly:.1f}")
-    
-    st.info(f"💡 每月公积金对冲了房贷月供的 **{int(((data_a['res_a']['fund'] + data_a['res_b']['fund']) * 2)/data_a['curr_m']*100) if data_a['curr_m']>0 else 100}%**。")
-    if data_a['savings'] > 0: st.success(f"🏖️ 每 **{(dream_cost*travel_num)/data_a['savings']:.1f}** 个月可全款去一次{dream_dest}。")
+    if view_mode == "⚖️ A/B 核心对决 (对比模式)":
+        st.title("⚖️ 平行时空核心指标对决")
+        
+        # 指标对比
+        c1, c2, c3 = st.columns(3)
+        c1.metric("家庭总到手 (方案 B)", f"¥{int(data_b['total_net']):,}", delta=f"较方案 A: {int(data_b['total_net'] - data_a['total_net']):,}")
+        c2.metric("家庭总月支 (方案 B)", f"¥{int(data_b['total_exp']):,}", delta=f"较方案 A: {int(data_b['total_exp'] - data_a['total_exp']):,}", delta_color="inverse")
+        c3.metric("月度净结余 (方案 B)", f"¥{int(data_b['savings']):,}", delta=f"较方案 A: {int(data_b['savings'] - data_a['savings']):,}")
 
-    st.divider()
-    st.subheader("🔍 消费工时透视")
-    l1, l2 = st.columns([1, 2])
-    with l1:
-        st.selectbox("谁来买单？", [n_a, n_b], key="act_m")
-        item = st.text_input("心仪商品", "新智能手机")
-        price = st.number_input("价格(元)", value=6000.0)
-    with l2:
-        h = float(price / active_hourly) if active_hourly > 0 else 0
-        st.write(f"购买 **{item}** 相当于消耗 **{st.session_state.act_m}** 约 **{h:.1f} 小时** 的奋斗成果。")
-        st.progress(min(h/176, 1.0))
+        # 图形化结构对比
+        st.subheader("📊 收入支出结构直观对比")
+        comp_df = pd.DataFrame([
+            {"方案": "方案 A (现实)", "核心指标": "1. 总月收入", "金额 (元)": data_a['total_net']},
+            {"方案": "方案 B (预测)", "核心指标": "1. 总月收入", "金额 (元)": data_b['total_net']},
+            {"方案": "方案 A (现实)", "核心指标": "2. 总月支出", "金额 (元)": data_a['total_exp']},
+            {"方案": "方案 B (预测)", "核心指标": "2. 总月支出", "金额 (元)": data_b['total_exp']},
+            {"方案": "方案 A (现实)", "核心指标": "3. 净结余", "金额 (元)": data_a['savings']},
+            {"方案": "方案 B (预测)", "核心指标": "3. 净结余", "金额 (元)": data_b['savings']}
+        ])
+        fig = px.bar(comp_df, x="核心指标", y="金额 (元)", color="方案", barmode="group", text_auto='.0f', template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 旅行对比补充
+        st.info(f"🏖️ **旅行自由度竞技：** 按方案 A 每 **{(dream_cost*travel_num)/data_a['savings']:.1f}** 个月去一次{dream_dest} 🆚 按方案 B 每 **{(dream_cost*travel_num)/data_b['savings']:.1f}** 个月去一次。")
 
-    st.divider()
-    st.subheader("🛡️ 家庭护城河测试")
-    cl_p, cr_p = st.columns(2)
-    with cl_p:
-        loss = st.radio("风险模拟：如果谁暂时失去收入？", [f"{n_a}失业", f"{n_b}失业"])
-        survive = data_a['res_b']['net'] if loss == f"{n_a}失业" else data_a['res_a']['net']
-        gap = survive - data_a['total_exp']
-        if gap >= 0: st.success(f"护城河稳固：单薪仍可结余 ¥{int(gap):,}")
-        else: st.error(f"每月缺口 ¥{int(abs(gap)):,}")
-    with cr_p:
-        dream = st.text_input("下一个大件梦想", "换一辆新车"); dp = st.number_input("梦想金额 (元)", value=300000.0)
-        if data_a['savings'] > 0: st.warning(f"达成还需 **{dp / data_a['savings']:.1f}** 个月。")
+    else:
+        # 💡 核心不变：利用动态映射，0 代码冗余实现 B 方案独立渲染
+        is_b = (view_mode == "🚀 仅看方案 B (预测)")
+        act_d = data_b if is_b else data_a
+        act_liv = living_b if is_b else living
+        act_oth = other + purchase_b/12 if is_b else other
+        act_ag = a_g_b if is_b else a_g
+        act_bg = b_g_b if is_b else b_g
+        label = "B" if is_b else "A"
 
-    st.divider()
-    st.subheader("🍲 家庭支出精细化构成 (方案 A)")
-    exp_df = pd.DataFrame({"项目": ["房贷", "车贷", "生活费", "杂项", f"{n_a}税费", f"{n_b}税费"], "金额": [data_a['curr_m'], c_l, living, other, data_a['res_a']['tax_ins'], data_a['res_b']['tax_ins']]})
-    st.plotly_chart(px.bar(exp_df, x="项目", y="金额", color="项目", text_auto='.0f', template="plotly_white"), use_container_width=True)
+        sr = act_d['savings'] / act_d['total_net'] if act_d['total_net'] > 0 else 0
+        dr = (act_d['total_exp'] - act_liv) / act_d['total_net'] if act_d['total_net'] > 0 else 1
+        moat = asset_total / act_d['total_exp'] if act_d['total_exp'] > 0 else 0
+        score = (min(sr/0.4, 1)*40) + (max(0, 1-dr/0.6)*30) + (min(moat/12, 1)*30)
+        
+        st.title(f"📊 Balance & Future | 健康分 ({label})：{int(score)}")
+        st.progress(score/100)
+        st.markdown("<style>[data-testid='stMetric']:nth-child(3) { background-color: rgba(16, 185, 129, 0.2); }</style>", unsafe_allow_html=True)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(f"总到手({label})", f"¥{int(act_d['total_net']):,}")
+        c2.metric(f"总支出({label})", f"¥{int(act_d['total_exp']):,}")
+        c3.metric(f"月结余({label})", f"¥{int(act_d['savings']):,}", delta=f"{int(sr*100)}% 储蓄率")
+        
+        # 局部时薪逻辑
+        if 'act_m' not in st.session_state: st.session_state.act_m = n_a
+        act_h_rate = (act_ag + a_gig)/a_h if st.session_state.act_m == n_a else (act_bg + b_gig)/b_h
+        c4.metric(f"{st.session_state.act_m} 时薪", f"¥{act_h_rate:.1f}")
+        
+        st.info(f"💡 每月公积金对冲了房贷月供的 **{int(((act_d['res_a']['fund'] + act_d['res_b']['fund']) * 2)/act_d['curr_m']*100) if act_d['curr_m']>0 else 100}%**。")
+        if act_d['savings'] > 0: st.success(f"🏖️ 每 **{(dream_cost*travel_num)/act_d['savings']:.1f}** 个月可全款去一次{dream_dest}。")
+
+        st.divider()
+        st.subheader("🔍 消费工时透视")
+        l1, l2 = st.columns([1, 2])
+        with l1:
+            # 引入独立的 Key 防止切换时报错
+            st.selectbox("谁来买单？", [n_a, n_b], key=f"act_m_{label}")
+            item = st.text_input("心仪商品", "新智能手机", key=f"i_{label}")
+            price = st.number_input("价格(元)", value=6000.0, key=f"p_{label}")
+        with l2:
+            curr_payer = st.session_state.get(f"act_m_{label}", n_a)
+            h_rate = (act_ag + a_gig)/a_h if curr_payer == n_a else (act_bg + b_gig)/b_h
+            h = float(price / h_rate) if h_rate > 0 else 0
+            st.write(f"购买 **{item}** 相当于消耗 **{curr_payer}** 约 **{h:.1f} 小时** 的奋斗成果。")
+            st.progress(min(h/176, 1.0))
+
+        st.divider()
+        st.subheader("🛡️ 家庭护城河测试")
+        cl_p, cr_p = st.columns(2)
+        with cl_p:
+            loss = st.radio("风险模拟：如果谁暂时失去收入？", [f"{n_a}失业", f"{n_b}失业"], key=f"l_{label}")
+            survive = act_d['res_b']['net'] if loss == f"{n_a}失业" else act_d['res_a']['net']
+            gap = survive - act_d['total_exp']
+            if gap >= 0: st.success(f"护城河稳固：单薪仍可结余 ¥{int(gap):,}")
+            else: st.error(f"每月缺口 ¥{int(abs(gap)):,}")
+        with cr_p:
+            dream = st.text_input("下一个大件梦想", "换一辆新车", key=f"d_{label}"); dp = st.number_input("梦想金额 (元)", value=300000.0, key=f"dp_{label}")
+            if act_d['savings'] > 0: st.warning(f"达成还需 **{dp / act_d['savings']:.1f}** 个月。")
+
+        st.divider()
+        st.subheader(f"🍲 家庭支出精细化构成 (方案 {label})")
+        exp_df = pd.DataFrame({"项目": ["房贷", "车贷", "生活费", "杂项", f"{n_a}税费", f"{n_b}税费"], "金额": [act_d['curr_m'], c_l, act_liv, act_oth, act_d['res_a']['tax_ins'], act_d['res_b']['tax_ins']]})
+        st.plotly_chart(px.bar(exp_df, x="项目", y="金额", color="项目", text_auto='.0f', template="plotly_white"), use_container_width=True)
 
 elif view == "📉 资产演变长廊":
     st.title("⏳ 资产演变与 FIRE 审计")
@@ -233,7 +278,6 @@ elif view == "🕳️ “无感支出”黑洞":
     st.title("🕳️ “无感支出”黑洞 & 订阅制断头台")
     st.markdown("### 📌 什么是“无感支出”？\n财务学中著名的**“拿铁因子”**理论指出：那些微小的开销在复利下会演变成巨大的黑洞。")
     try:
-        # 动态读取对应存档的订阅表 (Sub_A 或 Sub_B)
         sub_d = conn.read(worksheet=f"Sub_{active_profile}", usecols=[0, 1, 2, 3], ttl=0).dropna(how="all")
         sub_d['状态'] = sub_d['状态'].astype(bool)
     except: 
