@@ -13,7 +13,7 @@ def check_password():
         _, center_col, _ = st.columns([1, 2, 1])
         with center_col:
             st.title("🔒 Balance & Future")
-            st.write("这是一个私密的家庭财务战略系统。")
+            st.write("这是一个私密的家庭财务系统。")
             pwd = st.text_input("请输入家庭通行码：", type="password")
             if st.button("进入系统"):
                 if pwd == st.secrets["password"]:
@@ -61,7 +61,7 @@ def run_strategic_calc(gross_a, gig_a, gross_b, gig_b, m_p, m_r, m_y, c_l, livin
 st.sidebar.title("🚀 战略配置中心")
 
 with st.sidebar.expander("👤 成员与梦想配置", expanded=False):
-    n_a = st.text_input("我的称呼", "Jim")
+    n_a = st.text_input("我的称呼", "我")
     n_b = st.text_input("队友称呼", "队友")
     dream_dest = st.text_input("梦想目的地", "马尔代夫")
     dream_cost = st.number_input("预计人均花费", value=15000.0)
