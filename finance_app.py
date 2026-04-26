@@ -4,9 +4,8 @@ import plotly.express as px
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. 页面配置与安全门禁 ---
-st.set_page_config(page_title="Balance & Future Pro V17.3", layout="wide")
+st.set_page_config(page_title="Balance & Future Pro V18", layout="wide")
 
-# 建立数据库连接
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def check_password():
@@ -29,20 +28,38 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 2. 云端数据调度中心 (支持备注保护) ---
+# --- 2. 云端数据调度中心 (支持多存档隔离) ---
 @st.cache_data(ttl=0)
-def load_cloud_config():
+def load_cloud_config(profile_name):
     try:
-        df = conn.read(worksheet="Global_Config", usecols=[0, 1, 2])
+        # 根据当前选择的存档，动态读取对应的表 (Config_A 或 Config_B)
+        sheet_name = f"Config_{profile_name}"
+        df = conn.read(worksheet=sheet_name, usecols=[0, 1, 2])
         df = df.dropna(subset=['Parameter'])
         val_dict = pd.Series(df.Value.values, index=df.Parameter).to_dict()
         memo_dict = pd.Series(df.备注.values, index=df.Parameter).to_dict()
         return {"values": val_dict, "memos": memo_dict}
-    except:
+    except Exception as e:
         return {"values": {}, "memos": {}}
 
-if 'full_config' not in st.session_state:
-    st.session_state.full_config = load_cloud_config()
+# --- 侧边栏：多存档切换器 ---
+st.sidebar.title("🚀 战略配置中心")
+st.sidebar.markdown("### 📂 当前档案槽位")
+# 核心升级：存档下拉菜单
+active_profile = st.sidebar.selectbox(
+    "切换云端存档 (互相独立)", 
+    ["A", "B"], 
+    format_func=lambda x: "存档 A (主计划)" if x == "A" else "存档 B (独立分身)"
+)
+
+# 监听存档切换，一旦切换立即刷新系统状态并重载云端数据
+if st.session_state.get('current_profile') != active_profile:
+    st.session_state.current_profile = active_profile
+    st.session_state.full_config = load_cloud_config(active_profile)
+    # 如果处于黑洞页面，清理旧表格的缓存状态
+    if 'sub_ed' in st.session_state:
+        del st.session_state['sub_ed']
+    st.rerun()
 
 def get_cfg(key, default):
     val = st.session_state.full_config["values"].get(key, default)
@@ -73,9 +90,8 @@ def run_calc(gross_a, gig_a, gross_b, gig_b, m_p, m_r, m_y, c_l, living, other, 
     t_exp = curr_m + c_l + living + other
     return {"total_net": t_net, "total_exp": t_exp, "savings": t_net - t_exp, "m_seq": m_seq, "res_a": res_a, "res_b": res_b, "curr_m": curr_m}
 
-# --- 4. 侧边栏：战略配置中心 ---
-st.sidebar.title("🚀 战略配置中心")
-
+# --- 4. 侧边栏：战略配置项 ---
+st.sidebar.divider()
 with st.sidebar.expander("👤 成员与梦想配置", expanded=False):
     n_a = st.text_input("我的称呼", value=get_cfg("n_a", "Jim"))
     n_b = st.text_input("队友称呼", value=get_cfg("n_b", "队友"))
@@ -122,13 +138,14 @@ else:
     a_g_b, a_m_b, b_g_b, b_m_b, living_b, purchase_b = a_g, a_m, b_g, b_m, living, 0
 
 st.sidebar.divider()
-if st.sidebar.button("💾 全量保存至云端 (Google Drive)"):
+# 动态生成对应的保存表名
+if st.sidebar.button(f"💾 覆盖保存至【存档 {active_profile}】"):
     new_v = {"n_a": n_a, "n_b": n_b, "dream_dest": dream_dest, "dream_cost": dream_cost, "travel_num": travel_num, "a_g": a_g, "a_gig": a_gig, "a_m": a_m, "a_h": a_h, "b_g": b_g, "b_gig": b_gig, "b_m": b_m, "b_h": b_h, "pf_pct": pf_pct, "m_p": m_p, "m_r": m_r, "m_y": m_y, "asset_total": asset_total, "c_l": c_l, "c_y": c_y, "living": living, "other": other}
     save_data = [{"Parameter": k, "Value": v, "备注": st.session_state.full_config["memos"].get(k, "")} for k, v in new_v.items()]
     try:
-        conn.update(worksheet="Global_Config", data=pd.DataFrame(save_data))
+        conn.update(worksheet=f"Config_{active_profile}", data=pd.DataFrame(save_data))
         st.session_state.full_config["values"] = new_v
-        st.sidebar.success("✅ 全局战略参数已同步！")
+        st.sidebar.success(f"✅ 全局参数已同步至存档 {active_profile}！")
     except Exception as e: st.sidebar.error(f"保存失败: {e}")
 
 # --- 5. 核心计算逻辑执行 ---
@@ -216,12 +233,17 @@ elif view == "🕳️ “无感支出”黑洞":
     st.title("🕳️ “无感支出”黑洞 & 订阅制断头台")
     st.markdown("### 📌 什么是“无感支出”？\n财务学中著名的**“拿铁因子”**理论指出：那些微小的开销在复利下会演变成巨大的黑洞。")
     try:
-        sub_d = conn.read(worksheet="Subscriptions", usecols=[0, 1, 2, 3], ttl=0).dropna(how="all")
+        # 动态读取对应存档的订阅表 (Sub_A 或 Sub_B)
+        sub_d = conn.read(worksheet=f"Sub_{active_profile}", usecols=[0, 1, 2, 3], ttl=0).dropna(how="all")
         sub_d['状态'] = sub_d['状态'].astype(bool)
-    except: sub_d = pd.DataFrame([{"项目": "测试项目", "月费": 35.0, "状态": True, "备注": ""}])
+    except: 
+        sub_d = pd.DataFrame([{"项目": "测试项目", "月费": 35.0, "状态": True, "备注": ""}])
+        
     e_df = st.data_editor(sub_d, num_rows="dynamic", key="sub_ed")
-    if st.button("💾 保存订阅更新至云端"):
-        conn.update(worksheet="Subscriptions", data=e_df); st.success("✅ 订阅数据与备注已同步！")
+    if st.button(f"💾 保存订阅更新至【存档 {active_profile}】"):
+        conn.update(worksheet=f"Sub_{active_profile}", data=e_df)
+        st.success(f"✅ 订阅数据已同步至存档 {active_profile}！")
+        
     m_sub = e_df[e_df["状态"] == True]["月费"].sum(); daily = st.number_input("每日其他开支", value=50.0); y = st.slider("持续年数", 1, 30, 10); tbh = (daily * 365 + m_sub * 12) * y
     st.error(f"😱 {y}年后累计消耗 ¥{tbh:,.0f}，相当于奋斗了 **{tbh/active_hourly:.1f} 小时**。")
 
