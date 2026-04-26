@@ -46,7 +46,7 @@ st.sidebar.markdown("### 📂 当前档案槽位")
 active_profile = st.sidebar.selectbox(
     "切换云端存档 (互相独立)", 
     ["A", "B"], 
-    format_func=lambda x: "存档 A (主计划)" if x == "A" else "存档 B (独立分身)"
+    format_func=lambda x: "存档 A (牛计划)" if x == "A" else "存档 B (贤计划)"
 )
 
 if st.session_state.get('current_profile') != active_profile:
